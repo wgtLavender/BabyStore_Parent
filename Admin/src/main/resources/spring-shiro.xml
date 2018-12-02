@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.3.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.2.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.3.xsd">
+
+
+
+	<!-- 会话管理器 -->
+	<bean id="sessionManager"
+		class="org.apache.shiro.web.session.mgt.DefaultWebSessionManager">
+		<!-- session的失效时长，单位毫秒 -->
+		<property name="globalSessionTimeout" value="600000" />
+		<!-- 删除失效的session -->
+		<property name="deleteInvalidSessions" value="true" />
+	</bean>
+
+
+
+	<!-- 缓存管理器 -->
+	<bean id="cacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+		<property name="cacheManagerConfigFile" value="classpath:shiro-ehcache.xml" />
+	</bean>
+
+	<!-- 凭证匹配器 -->
+	<bean id="credentialsMatcher"
+		class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+		<property name="hashAlgorithmName" value="md5" />
+		<property name="hashIterations" value="2" />
+	</bean>
+
+
+	<bean id="userRealm" class="com.qfedu.shiro.QfeduRealm">
+		<!-- 为自定义的realm指定凭证匹配器 -->
+		<property name="credentialsMatcher" ref="credentialsMatcher"></property>
+	</bean>
+
+	<bean id="hasRoles" class="com.qfedu.shiro.CustomRolesAuthorizationFilter"></bean>
+	<!-- 安全管理器，由spring进行初始化securityManager -->
+	<!-- 由spring进行整合之后，shiro就不在需要ini文件了 -->
+	<bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+		<!-- 指定自定义域 -->
+		<!-- <property name="realm" ref="userRealm" /> -->
+		<!-- 自定义缓存处理器，默认shiro拥有自己的缓存处理器，并且默认对授权的信息进行了缓存，第一次授权调用realm进行数据库查询，第二次就直接从缓存中读取 -->
+
+		<property name="cacheManager" ref="cacheManager"></property>
+		<!-- session管理器的配置，可以指定session有效期 -->
+		<property name="sessionManager" ref="sessionManager"></property>
+	</bean>
+
+	<!-- Shiro 的Web过滤器 -->
+	<bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+		<property name="securityManager" ref="securityManager" />
+		<!-- loginUrl认证提交地址，如果没有认证将会请求此地址进行认证 -->
+
+		<!-- 路径可以是两种方式1指向一个业务处理器，2指向一个表单页面 -->
+		<property name="loginUrl" value="/logins.html" />
+		<!-- 通过unauthoeizedUrl 指定没有权限操作时跳转页面 -->
+		<property name="unauthorizedUrl" value="/refuse.jsp" />
+
+		<property name="filters">
+			<map>
+				<entry key="myroles" value-ref="hasRoles" />
+			</map>
+		</property>
+
+
+		<!-- 过虑器链定义，从上向下顺序执行，一般将/**放在最下边 -->
+		<property name="filterChainDefinitions">
+			<value>
+				<!-- 退出拦截，请求logout执行退出操作。无需创建logout对应的业务处理器，当访问此路径是，shiro会清除自己的session,并且重定向到登录页面 -->
+				/logout = logout
+				/crm_sale/opp/salchance_add=perms[salchance:create]
+
+
+				<!-- 相当于之前在init中配置的角色和权限在这里进行配置 -->
+				<!-- roles[XX]表示有XX角色才可访问 -->
+
+				/crm_sale/dev/**=myroles["客户经理","销售经理"]
+				/crm_sale/opp/**=myroles["销售经理"]
+				/loginshiro=anon
+				/crm_base/** =anon
+				/addUsers=anon
+
+
+				<!--对静态资源的匿名访问 -->
+
+				/js/** =anon
+				/images/**= anon
+				/styles/**= anon
+				/lang/** =anon
+				/umeditor.js=anon
+
+
+				/umeditor.min.js= anon
+				/datepicker/** =anon
+				/dialogs/**= anon
+
+				/item/*= authc
+				<!--authc是认证后能够访问 user表示身份认证通过或通过记住我认证通过的可以访问 -->
+				/** = authc
+			</value>
+		</property>
+	</bean>
+
+
+</beans>
